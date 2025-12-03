@@ -19,13 +19,11 @@ public:
   MoveAction()
   : plansys2::ActionExecutorClient("move", 500ms), goal_sent_(false), progress_(0.0)
   {
-    // Subscriber alla posizione del robot
     odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
       "/odom", 10,
       std::bind(&MoveAction::odom_callback, this, std::placeholders::_1)
     );
 
-    // Nodo interno per action client Nav2
     nav2_node_ = rclcpp::Node::make_shared("move_action_nav2_client");
     nav2_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(
       nav2_node_, "navigate_to_pose"
@@ -44,7 +42,6 @@ private:
 
     std::string wp_to_navigate = args[2];
 
-    // Trasforma il nome del waypoint in coordinate
     double goal_x, goal_y;
     if (wp_to_navigate == "bathroom") {
       goal_x = 10.0;
@@ -58,7 +55,6 @@ private:
       return;
     }
 
-    // Invia il goal solo la prima volta
     if (!goal_sent_) {
       if (!nav2_client_->wait_for_action_server(1s)) {
         RCLCPP_WARN(get_logger(), "NavigateToPose server not ready");
@@ -87,19 +83,16 @@ private:
       nav2_client_->async_send_goal(goal_msg, send_goal_options);
       goal_sent_ = true;
 
-      // Salvo la posizione iniziale per calcolo progress
       start_x_ = current_x_;
       start_y_ = current_y_;
     }
 
-    // Calcola distanza e progress
     double total_dist = std::hypot(goal_x - start_x_, goal_y - start_y_);
     double rem_dist   = std::hypot(goal_x - current_x_, goal_y - current_y_);
     progress_ = total_dist > 0.0 ? 1.0 - std::min(rem_dist / total_dist, 1.0) : 1.0;
 
     send_feedback(progress_, "Moving to " + wp_to_navigate);
-    std::cout << rem_dist << std::endl;
-    // Se vicino al target, chiama finish
+
     if (rem_dist < 0.6) {
       goal_sent_= false;
       progress_ = 1.0;
