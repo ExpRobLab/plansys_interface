@@ -1,138 +1,123 @@
+
+#include <memory>
+#include <string>
+#include <cmath>
 #include "plansys2_executor/ActionExecutorClient.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
-#include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "lifecycle_msgs/msg/transition.hpp"
-#include <memory>
-#include <chrono>
-#include <string>
-#include <algorithm>
-#include <cmath>
 
 using namespace std::chrono_literals;
-
 class ChangeState : public plansys2::ActionExecutorClient
 {
 public:
   ChangeState()
-      : plansys2::ActionExecutorClient("change_state", 500ms), goal_sent_(false), progress_(0.0)
+  : plansys2::ActionExecutorClient("change_state", 500ms)
   {
-    odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        "/odom", 10,
-        std::bind(&ChangeState::odom_callback, this, std::placeholders::_1));
+    // Subscription odometry
+    odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      "/odom", 10,
+      std::bind(&ChangeState::odom_callback, this, std::placeholders::_1));
 
-    nav2_node_ = rclcpp::Node::make_shared("move_action_nav2_client");
+    // Client Nav2
     nav2_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(
-        nav2_node_, "navigate_to_pose");
+      this, "navigate_to_pose");
+    
+    // inizializza i flag
+    nav2_done_ = false;
+    nav2_success_ = false;
   }
 
 private:
-  void do_work() override
+  // Resetta stato ogni volta che l’azione viene attivata
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+  on_activate(const rclcpp_lifecycle::State & previous_state) override
   {
-     RCLCPP_WARN(get_logger(), "ChangeState running");
-    auto args = get_arguments();
-    if (args.size() < 3)
-    {
-      RCLCPP_ERROR(get_logger(), "Not enough arguments for move action");
-      finish(false, 0.0, "Insufficient arguments");
-      return;
-    }
-    std::string marker_from = args[2];
-    std::string marker_to = args[1];
-    std::string robot = args[0];
-
-    //  if (marker_to == "marker1") {
-    double goal_x = 0.0;
-    double goal_y = 0.0;
-    // } else {
-    //   RCLCPP_ERROR(get_logger(), "Unknown waypoint: %s", marker_to.c_str());
-    //   finish(false, 0.0, "Unknown waypoint");
-    //   return;
-    // }
-
-    if (!goal_sent_)
-    {
-      if (!nav2_client_->wait_for_action_server(1s))
-      {
-        RCLCPP_WARN(get_logger(), "NavigateToPose server not ready");
-        return;
-      }
-
-      geometry_msgs::msg::PoseStamped goal_pose;
-      goal_pose.header.frame_id = "map";
-      goal_pose.pose.position.x = goal_x;
-      goal_pose.pose.position.y = goal_y;
-      goal_pose.pose.orientation.w = 1.0;
-
-      auto goal_msg = nav2_msgs::action::NavigateToPose::Goal();
-      goal_msg.pose = goal_pose;
-
-      rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions send_goal_options;
-      send_goal_options.result_callback =
-          [this, marker_to](const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult &result)
-      {
-        if (result.code != rclcpp_action::ResultCode::SUCCEEDED)
-        {
-          RCLCPP_ERROR(get_logger(), "Navigation failed: %s", marker_to.c_str());
-          finish(true, 1.0, "Move failed");
-        }
-      };
-
-      nav2_client_->async_send_goal(goal_msg, send_goal_options);
-      goal_sent_ = true;
-
-      start_x_ = current_x_;
-      start_y_ = current_y_;
-    }
-
-    double total_dist = std::hypot(goal_x - start_x_, goal_y - start_y_);
-    double rem_dist = std::hypot(goal_x - current_x_, goal_y - current_y_);
-    progress_ = total_dist > 0.0 ? 1.0 - std::min(rem_dist / total_dist, 1.0) : 1.0;
-
-    send_feedback(progress_, "Moving to " + marker_to);
-
-    if (rem_dist < 0.6)
-    {
-      goal_sent_ = false;
-      progress_ = 1.0;
-      send_feedback(progress_, "Moving to " + marker_to);
-      RCLCPP_INFO(get_logger(), "Reached waypoint: %s", marker_to.c_str());
-      finish(true, 1.0, "Move completed");
-    }
-
-    rclcpp::spin_some(nav2_node_);
+    RCLCPP_INFO(get_logger(), "[ChangeState] Attivata");
+    goal_sent_ = false;
+    nav2_done_ = false;
+    nav2_success_ = false;
+    return plansys2::ActionExecutorClient::on_activate(previous_state);
   }
 
-  void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
+  void do_work() override
   {
+    auto args = get_arguments();
+    if (args.size() < 7) {
+        finish(false, 0.0, "Argomenti insufficienti");
+        return;
+    }
+
+    std::string marker_to = "home_point";
+    double gx = 0;
+    double gy = 1;
+
+    
+
+    if (!goal_sent_) {
+        if (!nav2_client_->wait_for_action_server(1s)) return;
+
+        nav2_msgs::action::NavigateToPose::Goal goal_msg;
+        goal_msg.pose.header.frame_id = "map";
+        goal_msg.pose.header.stamp = now();
+        goal_msg.pose.pose.position.x = gx;
+        goal_msg.pose.pose.position.y = gy;
+        goal_msg.pose.pose.orientation.w = 1.0;
+
+        rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions options;
+        options.result_callback = [this](auto result){
+            nav2_done_ = true;
+            nav2_success_ = (result.code == rclcpp_action::ResultCode::SUCCEEDED);
+        };
+
+        nav2_client_->async_send_goal(goal_msg, options);
+        goal_sent_ = true;
+    }
+
+    // finish SOLO qui
+    if (nav2_done_) {
+        finish(nav2_success_, 1.0, "Completed");
+        return;
+    }
+
+    double dist = std::hypot(gx - current_x_, gy - current_y_);
+    send_feedback(std::max(0.0, 1.0 - dist / 10.0),
+                  "In movimento verso " + marker_to);
+  }
+
+  void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
     current_x_ = msg->pose.pose.position.x;
     current_y_ = msg->pose.pose.position.y;
   }
 
-  float progress_;
-  bool goal_sent_;
-  double start_x_ = 0.0, start_y_ = 0.0;
+  // Stato interno
+  bool goal_sent_ = false;
+  bool nav2_done_ = false;     
+  bool nav2_success_ = false;   
+
+  double goal_x_ = 0.0, goal_y_ = 0.0;
   double current_x_ = 0.0, current_y_ = 0.0;
 
-  rclcpp::Node::SharedPtr nav2_node_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr nav2_client_;
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_;
 };
 
-int main(int argc, char **argv)
+
+int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<ChangeState>();
+  node->set_parameter(rclcpp::Parameter("action_name", "change_state"));
 
-  node->set_parameter(rclcpp::Parameter("state_name", "change_state"));
   node->trigger_transition(lifecycle_msgs::msg::Transition::TRANSITION_CONFIGURE);
   node->trigger_transition(lifecycle_msgs::msg::Transition::TRANSITION_ACTIVATE);
 
   rclcpp::spin(node->get_node_base_interface());
-
   rclcpp::shutdown();
-
   return 0;
 }
+
+
+

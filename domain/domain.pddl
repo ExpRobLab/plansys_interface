@@ -105,84 +105,107 @@
         )
     )
 
+    (:durative-action move_to_photograph
+     :parameters (?r - robot ?m - marker)
+        :duration ( = ?duration 5)
+        :condition (and
+        (at start (free ?r))
+        (at start (photo_mode))
+        (at start (detected ?m))
+        (at start (unphotographed ?m))
+        (at start (robot_not_at ?r ?m))
+
+        )
+        :effect (and 
+            (at start (not(free ?r)))
+
+            (at end (detected ?m))
+            (at end (not(unphotographed ?m)))
+            (at end (photographed ?m))
+            (at end (free ?r))
+            (at end (robot_at ?r ?m))
+        )
+    )
 
 
 ; ;; probelma da qui in poi
-    (:durative-action move_to_photograph_first
-        :parameters (?r - robot ?m1 - marker  ?m0 - marker ?b - base)
-        :duration ( = ?duration 5)
-        :condition (and
-            (at start (photo_mode))
+    ; (:durative-action move_to_photograph_first
+    ;     :parameters (?r - robot ?m1 - marker  ?m0 - marker ?b - base)
+    ;     :duration ( = ?duration 5)
+    ;     :condition (and
+    ;         (at start (photo_mode))
 
-            (at start (photographed ?m0))
-            (at start (unphotographed ?m1))
+    ;         (at start (photographed ?m0))
+    ;         (at start (unphotographed ?m1))
 
-            (at start (detected ?m1))
-            (at start (detected ?m0))
-            (at start (not(= ?m1 ?m0)))
+    ;         (at start (detected ?m1))
+    ;         (at start (detected ?m0))
+    ;         (at start (not(= ?m1 ?m0)))
 
-            (at start (is_after ?m0 ?m1)) 
-            (at start (is_base ?b ?m0))
+    ;         (at start (is_after ?m0 ?m1)) 
+    ;         (at start (is_base ?b ?m0))
             
-            (at start (robot_not_at ?r ?m1))
-            (at start (robot_at ?r ?m0))
+    ;         (at start (robot_not_at ?r ?m1))
+    ;         (at start (robot_at ?r ?m0))
 
 
-        )
-        :effect (and
+    ;     )
+    ;     :effect (and
 
             
-            (at end (robot_at ?r ?m1))
-            (at end (not(robot_not_at ?r ?m1)))
+    ;         (at end (robot_at ?r ?m1))
+    ;         (at end (not(robot_not_at ?r ?m1)))
 
-            (at end (not (robot_at ?r ?m0)))
-            (at end (robot_not_at ?r ?m0))
+    ;         (at end (not (robot_at ?r ?m0)))
+    ;         (at end (robot_not_at ?r ?m0))
 
-            (at end (photographed ?m1))
-            (at end (not(unphotographed ?m1)))
+    ;         (at end (photographed ?m1))
+    ;         (at end (not(unphotographed ?m1)))
 
-            (at end (not(at_base ?r ?b)))
+    ;         (at end (not(at_base ?r ?b)))
            
-        )
-    )
+    ;     )
+    ; )
 
 
-    (:durative-action move_to_photograph
-        :parameters (?r - robot ?m1 - marker ?m2 - marker ?m0 - marker ?b - base)
-        :duration ( = ?duration 5)
-        :condition (and
-            (at start (photo_mode))
+    ; (:durative-action move_to_photograph
+    ;     :parameters (?r - robot ?m1 - marker ?m2 - marker ?m0 - marker ?b - base)
+    ;     :duration ( = ?duration 5)
+    ;     :condition (and
+    ;         (at start (photo_mode))
             
-            (at start (not(= ?m1 ?m2)))
-            (at start (not(= ?m1 ?m0)))
+    ;         (at start (not(= ?m1 ?m2)))
+    ;         (at start (not(= ?m1 ?m0)))
 
-            (at start (photographed ?m1))
-            (at start (unphotographed ?m2))
+    ;         (at start (photographed ?m1))
+    ;         (at start (unphotographed ?m2))
 
-            (at start (is_after ?m1 ?m2)) 
+    ;         (at start (is_after ?m1 ?m2)) 
 
-            (at start (robot_not_at ?r ?m2))
-            (at start (robot_at ?r ?m1))
+    ;         (at start (robot_not_at ?r ?m2))
+    ;         (at start (robot_at ?r ?m1))
 
-            (at start (detected ?m1))
-            (at start (detected ?m2)) 
-        )
-        :effect (and
-
-            
-            (at end (robot_at ?r ?m2))
-            (at end (not(robot_not_at ?r ?m2)))
-
-            (at end (not (robot_at ?r ?m1)))
-            (at end (robot_not_at ?r ?m1))
-
-            (at end (photographed ?m2))
-            (at end (not(unphotographed ?m2)))
+    ;         (at start (detected ?m1))
+    ;         (at start (detected ?m2)) 
+    ;     )
+    ;     :effect (and
 
             
+    ;         (at end (robot_at ?r ?m2))
+    ;         (at end (not(robot_not_at ?r ?m2)))
+
+    ;         (at end (not (robot_at ?r ?m1)))
+    ;         (at end (robot_not_at ?r ?m1))
+
+    ;         (at end (photographed ?m2))
+    ;         (at end (not(unphotographed ?m2)))
+
+            
 
 
-        )
-    )
+    ;     )
+    ; )
+
+
 
 )

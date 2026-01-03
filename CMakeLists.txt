@@ -17,7 +17,14 @@ find_package(plansys2_executor REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
-
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(aruco_opencv_msgs REQUIRED)
+find_package(bme_gazebo_basics REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
 
 add_executable(get_plan src/getplan.cpp)
 add_executable(get_plan_and_execute src/getplan_and_execute.cpp)
@@ -56,7 +63,17 @@ ament_target_dependencies(move_to_photograph_action_node
   plansys2_msgs
   geometry_msgs
   nav2_msgs
+  nav_msgs
+  tf2_ros
+  tf2_geometry_msgs
+  aruco_opencv_msgs
+  bme_gazebo_basics
+  sensor_msgs
+  cv_bridge
+  OpenCV
 )
+target_link_libraries(move_to_photograph_action_node ${OpenCV_LIBRARIES} cv_bridge)
+
 ament_target_dependencies(move_to_photograph_first_action_node
   rclcpp
   rclcpp_action
@@ -83,6 +100,12 @@ ament_target_dependencies(move_to_detect_action_node
   plansys2_msgs
   geometry_msgs
   nav2_msgs
+  nav_msgs
+  tf2_ros
+  tf2_geometry_msgs
+  aruco_opencv_msgs
+  bme_gazebo_basics
+  OpenCV
 )
 
 
