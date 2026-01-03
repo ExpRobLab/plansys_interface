@@ -13,15 +13,15 @@
 
 using namespace std::chrono_literals;
 
-class MoveAction : public plansys2::ActionExecutorClient
+class MoveToPhotograph : public plansys2::ActionExecutorClient
 {
 public:
-  MoveAction()
-  : plansys2::ActionExecutorClient("move", 500ms), goal_sent_(false), progress_(0.0)
+  MoveToPhotograph()
+  : plansys2::ActionExecutorClient("move_to_photo", 500ms), goal_sent_(false), progress_(0.0)
   {
     odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
       "/odom", 10,
-      std::bind(&MoveAction::odom_callback, this, std::placeholders::_1)
+      std::bind(&MoveToPhotograph::odom_callback, this, std::placeholders::_1)
     );
 
     nav2_node_ = rclcpp::Node::make_shared("move_action_nav2_client");
@@ -33,24 +33,32 @@ public:
 private:
   void do_work() override
   {
+
+    RCLCPP_WARN(get_logger(), "MoveToPhotograph running");
+
     auto args = get_arguments();
     if (args.size() < 3) {
       RCLCPP_ERROR(get_logger(), "Not enough arguments for move action");
-      finish(false, 0.0, "Insufficient arguments");
+      finish(true, 0.0, "Insufficient arguments");
       return;
     }
 
-    std::string wp_to_navigate = args[2];
-
+    std::string marker_to = args[1];
+    std::string marker_from = args[2];
+    std::string robot = args[0];
     double goal_x, goal_y;
-    if (wp_to_navigate == "bathroom") {
-      goal_x = 10.0;
-      goal_y = 5.0;
-    } else if (wp_to_navigate == "bedroom") {
-      goal_x = 5.0;
+
+    if (marker_to == "marker2") {
+      goal_x = 6.0;
+      goal_y = 6.0;
+    } else if (marker_to == "marker3") {
+      goal_x = 6.0;
+      goal_y = -6.0;
+    } else if (marker_to == "marker4") {
+      goal_x = 6.0;
       goal_y = 6.0;
     } else {
-      RCLCPP_ERROR(get_logger(), "Unknown waypoint: %s", wp_to_navigate.c_str());
+      RCLCPP_ERROR(get_logger(), "Unknown waypoint: %s", marker_to.c_str());
       finish(false, 0.0, "Unknown waypoint");
       return;
     }
@@ -72,11 +80,11 @@ private:
 
       rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions send_goal_options;
       send_goal_options.result_callback =
-        [this, wp_to_navigate](const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result)
+        [this, marker_to](const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result)
         {
           if (result.code != rclcpp_action::ResultCode::SUCCEEDED) {
-            RCLCPP_ERROR(get_logger(), "Navigation failed: %s", wp_to_navigate.c_str());
-            finish(true, 1.0, "Move failed");
+            RCLCPP_ERROR(get_logger(), "Navigation failed: %s", marker_to.c_str());
+            finish(false, 1.0, "Move failed");
           }
         };
 
@@ -91,13 +99,13 @@ private:
     double rem_dist   = std::hypot(goal_x - current_x_, goal_y - current_y_);
     progress_ = total_dist > 0.0 ? 1.0 - std::min(rem_dist / total_dist, 1.0) : 1.0;
 
-    send_feedback(progress_, "Moving to " + wp_to_navigate);
+    send_feedback(progress_, "Moving to " + marker_to);
 
     if (rem_dist < 0.6) {
       goal_sent_= false;
       progress_ = 1.0;
-      send_feedback(progress_, "Moving to " + wp_to_navigate);
-      RCLCPP_INFO(get_logger(), "Reached waypoint: %s", wp_to_navigate.c_str());
+      send_feedback(progress_, "Moving to " + marker_to);
+      RCLCPP_INFO(get_logger(), "Reached waypoint: %s", marker_to.c_str());
       finish(true, 1.0, "Move completed");
     }
 
@@ -123,9 +131,9 @@ private:
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<MoveAction>();
+  auto node = std::make_shared<MoveToPhotograph>();
 
-  node->set_parameter(rclcpp::Parameter("action_name", "move"));
+  node->set_parameter(rclcpp::Parameter("action_name", "move_to_photo"));
   node->trigger_transition(lifecycle_msgs::msg::Transition::TRANSITION_CONFIGURE);
   node->trigger_transition(lifecycle_msgs::msg::Transition::TRANSITION_ACTIVATE);
 

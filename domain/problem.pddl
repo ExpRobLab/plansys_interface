@@ -1,26 +1,52 @@
-( define ( problem problem_1 )
-( :domain simple )
-( :objects
-	robot1  - robot
-  bedroom kitchen bathroom sitting_room corridor - room
+(define (problem navigation_problem) (:domain navigation)
+(:objects
+    robot1 - robot
+    marker1 marker0 marker3 marker2 marker4 - marker
+    base - base
 )
-( :init
-	( robot_at robot1 sitting_room)
+(:init
 
-  ( connected sitting_room corridor )
-  ( connected corridor sitting_room )
-  ( connected bedroom corridor )
-  ( connected corridor bedroom )
-  ( connected bedroom bathroom )
-  ( connected bathroom bedroom )
-  ( connected sitting_room kitchen )
-  ( connected kitchen sitting_room )
+    (undetected marker1)
+    (undetected marker2)
+    (undetected marker3)
+    (undetected marker4)
 
-  ( charging_point_at corridor)
-  ( battery_low robot1)
+    (detected marker0)
+    (photographed marker0)
+
+    (unphotographed marker1)
+    (unphotographed marker2)
+    (unphotographed marker3)
+    (unphotographed marker4)
+
+
+
+    (is_base base marker0)
+    (robot_at robot1 marker0)
+
+    (robot_not_at robot1 marker1)
+    (robot_not_at robot1 marker2)
+    (robot_not_at robot1 marker3)
+    (robot_not_at robot1 marker4)
+
+    (is_after marker0 marker1)
+    (is_after marker1 marker2)
+    (is_after marker2 marker3)
+    (is_after marker3 marker4)
+    
+
+    (detect_mode)
+    (free robot1)
+    
+ 
 )
-( :goal
-	( and
-		( robot_at robot1 bathroom)
-	))
+(:goal
+    (and
+
+    (photographed marker1)
+    (photographed marker2)
+    (photographed marker3)
+    (photographed marker4)
+    )
+)
 )
