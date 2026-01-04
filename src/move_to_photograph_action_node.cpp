@@ -2,6 +2,7 @@
 #include <string>
 #include <cmath>
 #include <fstream>
+#include <filesystem>
 #include <vector>
 #include "plansys2_executor/ActionExecutorClient.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -18,6 +19,7 @@
 #include <opencv2/opencv.hpp>
 
 using namespace std::chrono_literals;
+namespace fs = std::filesystem;
 
 class MoveToPhotograph : public plansys2::ActionExecutorClient
 {
@@ -54,16 +56,26 @@ public:
     }
 
 private:
+    std::string get_ws_path() {
+        try {
+            std::string pkg_path = ament_index_cpp::get_package_share_directory("bme_gazebo_basics");
+            fs::path p(pkg_path);
+            return p.parent_path().parent_path().parent_path().parent_path().string();
+        } catch (...) {
+            RCLCPP_ERROR(this->get_logger(), "Impossibile trovare il percorso del pacchetto!");
+            return "."; 
+        }
+    }
+
     void load_detected_markers()
     {
-        const char *home_ptr = std::getenv("HOME");
-        if (!home_ptr) return;
-
-        std::string file_path = std::string(home_ptr) + "/Desktop/Experimental/assignment2_ws/points_detected/detected_markers.yaml";
+        std::string ws_path = get_ws_path();
+        // AGGIUNTO IL PUNTO E VIRGOLA QUI SOTTO
+        std::string file_path = ws_path + "/points_detected/detected_markers.yaml";
         std::ifstream infile(file_path);
         
         if (!infile.is_open()) {
-            RCLCPP_WARN(this->get_logger(), "File YAML non trovato.");
+            RCLCPP_WARN(this->get_logger(), "File YAML non trovato: %s", file_path.c_str());
             return;
         }
 
@@ -95,10 +107,9 @@ private:
 
     void remove_first_marker_from_yaml()
     {
-        const char *home_ptr = std::getenv("HOME");
-        if (!home_ptr) return;
-
-        std::string file_path = std::string(home_ptr) + "/Desktop/Experimental/assignment2_ws/points_detected/detected_markers.yaml";
+        std::string ws_path = get_ws_path();
+        // AGGIUNTO IL PUNTO E VIRGOLA QUI SOTTO
+        std::string file_path = ws_path + "/points_detected/detected_markers.yaml";
         std::vector<MarkerData> remaining;
         
         std::ifstream infile(file_path);
@@ -121,7 +132,7 @@ private:
                 else if (clean.find("y:") == 0) { m.y = std::stod(clean.substr(2)); fields++; }
 
                 if (fields == 7) {
-                    if (!skipped) skipped = true; // Salta il primo
+                    if (!skipped) skipped = true; 
                     else remaining.push_back(m);
                     fields = 0;
                 }
@@ -142,7 +153,6 @@ private:
     void do_work() override
     {
         load_detected_markers();
-        
         if (marker_target.name.empty()) {
             finish(false, 0.0, "Nessun marker disponibile");
             return;
@@ -189,12 +199,16 @@ private:
         try {
             cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(last_img_, sensor_msgs::image_encodings::BGR8);
             cv::circle(cv_ptr->image, cv::Point(cv_ptr->image.cols / 2, cv_ptr->image.rows / 2), 50, CV_RGB(0, 255, 0), 3);
-            std::string dir_path = std::string(std::getenv("HOME")) + "/Desktop/Experimental/assignment2_ws/images";
-            rcpputils::fs::create_directories(dir_path);
+            std::string dir_path = get_ws_path() + "/images";
+            if (!fs::exists(dir_path)) {
+                fs::create_directories(dir_path);
+            }
             std::string file_path = dir_path + "/marker_" + std::to_string(marker_target.id) + ".png";
             cv::imwrite(file_path, cv_ptr->image);
-            RCLCPP_INFO(get_logger(), "Saved %s", file_path.c_str());
-        } catch (...) { RCLCPP_ERROR(get_logger(), "Save image error"); }
+            RCLCPP_INFO(get_logger(), "Immagine salvata: %s", file_path.c_str());
+        } catch (const std::exception &e) { 
+            RCLCPP_ERROR(get_logger(), "Errore salvataggio: %s", e.what()); 
+        }
     }
 
     void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
@@ -208,8 +222,8 @@ private:
         return plansys2::ActionExecutorClient::on_activate(previous_state);
     }
 
-    bool goal_sent_, nav2_done_, nav2_success_;
-    double current_x_, current_y_;
+    bool goal_sent_ = false, nav2_done_ = false, nav2_success_ = false;
+    double current_x_ = 0.0, current_y_ = 0.0;
     MarkerData marker_target;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
     rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr nav2_client_;
