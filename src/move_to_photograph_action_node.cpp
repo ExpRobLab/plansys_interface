@@ -14,7 +14,7 @@
 #include "sensor_msgs/msg/image.hpp"
 #include "aruco_opencv_msgs/msg/aruco_detection.hpp"
 #include <rcpputils/filesystem_helper.hpp>
-#include <cv_bridge/cv_bridge.h>
+#include <cv_bridge/cv_bridge.hpp>
 #include <opencv2/opencv.hpp>
 
 using namespace std::chrono_literals;
