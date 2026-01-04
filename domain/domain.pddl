@@ -84,8 +84,10 @@
 
             (at start (is_base ?b ?m0))
             (at start (detect_mode))
+            (at start (free ?r))
         )
         :effect (and
+            (at start (not(free ?r)))
             (at end (photo_mode))
             (at end (not(detect_mode)))
 
@@ -101,8 +103,7 @@
             (at end (robot_not_at ?r ?m2))
             (at end (robot_not_at ?r ?m3))
             (at end (robot_not_at ?r ?m4))
-
-        )
+            (at end (free ?r))        )
     )
 
     (:durative-action move_to_photograph

@@ -127,30 +127,32 @@ def generate_launch_description():
         output='screen',
         parameters=[])
         
-    move_to_detect_cmd = Node(
-        package='plansys_interface',
-        executable='move_to_detect_action_node',
-        name='move_to_detect_action_node',
-        namespace=namespace,
-        output='screen',
-        parameters=[])
-
-    chande_state_cmd = Node(
-        package='plansys_interface',
-        executable='change_state_action_node',
-        name='change_state_action_node',
-        namespace=namespace,
-        output='screen',
-        parameters=[])
 
     move_to_photograph_cmd = Node(
         package='plansys_interface',
         executable='move_to_photograph_action_node',
-        name='move_to_photograph_action_node',
+        name='move_to_photograph',
         namespace=namespace,
         output='screen',
-        parameters=[]) 
+        parameters=[{'action_name': 'move_to_photograph'}]) 
      
+    move_to_detect_cmd = Node(
+        package='plansys_interface',
+        executable='move_to_detect_action_node',
+        name='move_to_detect',
+        namespace=namespace,
+        output='screen',
+        parameters=[{'action_name': 'move_to_detect'}])
+
+    chande_state_cmd = Node(
+        package='plansys_interface',
+        executable='change_state_action_node',
+        name='change_state',
+        namespace=namespace,
+        output='screen',
+        parameters=[{'action_name': 'change_state'}])
+
+
     # move_to_photograph_first_cmd = Node(
     #     package='plansys_interface',
     #     executable='move_to_photograph_first_action_node',
