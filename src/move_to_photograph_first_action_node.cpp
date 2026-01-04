@@ -17,7 +17,7 @@ class MoveToPhotographFirst : public plansys2::ActionExecutorClient
 {
 public:
    MoveToPhotographFirst()
-  : plansys2::ActionExecutorClient("move_to_photo", 500ms), goal_sent_(false), progress_(0.0)
+  : plansys2::ActionExecutorClient("move_to_photograph", 500ms), goal_sent_(false), progress_(0.0)
   {
     odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
       "/odom", 10,
@@ -128,7 +128,7 @@ int main(int argc, char ** argv)
   rclcpp::init(argc, argv);
   auto node = std::make_shared< MoveToPhotographFirst>();
 
-  node->set_parameter(rclcpp::Parameter("action_name", "move_to_photo"));
+  node->set_parameter(rclcpp::Parameter("action_name", "move_to_photograph"));
   node->trigger_transition(lifecycle_msgs::msg::Transition::TRANSITION_CONFIGURE);
   node->trigger_transition(lifecycle_msgs::msg::Transition::TRANSITION_ACTIVATE);
 

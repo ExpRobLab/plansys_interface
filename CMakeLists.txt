@@ -72,7 +72,7 @@ ament_target_dependencies(move_to_photograph_action_node
   cv_bridge
   OpenCV
 )
-target_link_libraries(move_to_photograph_action_node ${OpenCV_LIBRARIES} cv_bridge)
+target_link_libraries(move_to_photograph_action_node ${OpenCV_LIBRARIES})
 
 ament_target_dependencies(move_to_photograph_first_action_node
   rclcpp
