@@ -31,7 +31,7 @@ add_executable(get_plan_and_execute src/getplan_and_execute.cpp)
 add_executable(move_to_detect_action_node src/move_to_detect_action_node.cpp)
 add_executable(move_to_photograph_action_node src/move_to_photograph_action_node.cpp)
 add_executable(change_state_action_node src/change_state_action_node.cpp)
-add_executable(move_to_photograph_first_action_node src/move_to_photograph_first_action_node.cpp)
+# add_executable(move_to_photograph_first_action_node src/move_to_photograph_first_action_node.cpp)
 
 
 ament_target_dependencies(get_plan
@@ -74,14 +74,14 @@ ament_target_dependencies(move_to_photograph_action_node
 )
 target_link_libraries(move_to_photograph_action_node ${OpenCV_LIBRARIES})
 
-ament_target_dependencies(move_to_photograph_first_action_node
-  rclcpp
-  rclcpp_action
-  plansys2_executor
-  plansys2_msgs
-  geometry_msgs
-  nav2_msgs
-)
+# ament_target_dependencies(move_to_photograph_first_action_node
+#   rclcpp
+#   rclcpp_action
+#   plansys2_executor
+#   plansys2_msgs
+#   geometry_msgs
+#   nav2_msgs
+# )
 
 ament_target_dependencies(change_state_action_node
   rclcpp
@@ -116,7 +116,7 @@ install(DIRECTORY
 )
 
 install(TARGETS
-  get_plan get_plan_and_execute move_to_detect_action_node move_to_photograph_action_node move_to_photograph_first_action_node change_state_action_node
+  get_plan get_plan_and_execute move_to_detect_action_node move_to_photograph_action_node  change_state_action_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

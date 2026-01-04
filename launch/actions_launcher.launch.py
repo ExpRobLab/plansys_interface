@@ -151,13 +151,13 @@ def generate_launch_description():
         output='screen',
         parameters=[]) 
      
-    move_to_photograph_first_cmd = Node(
-        package='plansys_interface',
-        executable='move_to_photograph_first_action_node',
-        name='move_to_photograph_first_action_node',
-        namespace=namespace,
-        output='screen',
-        parameters=[])  
+    # move_to_photograph_first_cmd = Node(
+    #     package='plansys_interface',
+    #     executable='move_to_photograph_first_action_node',
+    #     name='move_to_photograph_first_action_node',
+    #     namespace=namespace,
+    #     output='screen',
+    #     parameters=[])  
     
     # get_plan_and_execute_node = Node(
     #     package='plansys_interface',
@@ -186,7 +186,7 @@ def generate_launch_description():
     ld.add_action(move_to_detect_cmd)
     ld.add_action(chande_state_cmd)
     ld.add_action(move_to_photograph_cmd)
-    ld.add_action(move_to_photograph_first_cmd)
+    # ld.add_action(move_to_photograph_first_cmd)
     # ld.add_action(get_plan_and_execute_node)
     
     return ld
