@@ -18,10 +18,18 @@
 #include <rcpputils/filesystem_helper.hpp>
 #include <cv_bridge/cv_bridge.hpp>
 #include <opencv2/opencv.hpp>
+#include "geometry_msgs/msg/twist.hpp"
 
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
-
+enum class AlignState
+{
+    NAVIGATE,
+    ALIGN
+};
 class MoveToPhotograph : public plansys2::ActionExecutorClient
 {
 public:
@@ -36,12 +44,15 @@ public:
         double goal_y;
     };
 
-    MoveToPhotograph()
-        : plansys2::ActionExecutorClient("move_to_photograph_mode", 500ms)
+    MoveToPhotograph() : plansys2::ActionExecutorClient("move_to_photograph_mode", 500ms)
     {
+
+        // 
         odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
             "/odom", 10,
             std::bind(&MoveToPhotograph::odom_callback, this, std::placeholders::_1));
+        cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(
+            "/cmd_vel", 10);
 
         nav2_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(
             this, "navigate_to_pose");
@@ -52,8 +63,44 @@ public:
             [this](const sensor_msgs::msg::Image::SharedPtr msg)
             { last_img_ = msg; });
 
+        img_pub_ = this->create_publisher<sensor_msgs::msg::Image>("images_detected",10);
+
+        aruco_sub_ = this->create_subscription<aruco_opencv_msgs::msg::ArucoDetection>(
+            "/aruco_detections", 10, std::bind(&MoveToPhotograph::detection_callback, this, std::placeholders::_1));
+
         nav2_done_ = false;
         nav2_success_ = false;
+        tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+    }
+    void detection_callback(const aruco_opencv_msgs::msg::ArucoDetection::SharedPtr msg)
+    {
+        for (const auto &marker : msg->markers)
+        {
+            if (marker.marker_id != marker_target.id)
+                continue; //  SOLO il marker target
+              
+            try
+            {
+                std::string marker_frame = "marker_" + std::to_string(marker.marker_id);
+
+                // TRANSFORM LIVE: base_link <- marker
+                auto tf = tf_buffer_->lookupTransform(
+                    "base_link",
+                    marker_frame,
+                    tf2::TimePointZero);
+
+                live_marker_x_ = tf.transform.translation.x;
+                live_marker_y_ = tf.transform.translation.y;
+                if (marker_visible_ == false)
+                    marker_visible_ = true;
+            }
+            catch (const tf2::TransformException &)
+            {
+                // ERROR
+                // marker_visible_ = false;
+            }
+        }
     }
 
 private:
@@ -241,86 +288,108 @@ private:
             return;
         }
 
-     
-
         std::string marker_to = "home_point";
         double gx = marker_target.goal_x;
-        double gy =  marker_target.goal_y;
-
-        // invio goal solo la prima volta
-        if (!goal_sent_)
-        {
-            if (!nav2_client_->wait_for_action_server(1s))
-                return;
-
-            nav2_msgs::action::NavigateToPose::Goal goal_msg;
-            goal_msg.pose.header.frame_id = "map";
-            goal_msg.pose.header.stamp = now();
-            goal_msg.pose.pose.position.x = gx;
-            goal_msg.pose.pose.position.y = gy;
-            goal_msg.pose.pose.orientation.w = 1.0;
-
-            rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions options;
-            options.result_callback = [this, marker_to](auto result)
+        double gy = marker_target.goal_y;
+        if (this->state_ == AlignState::NAVIGATE)
+        { // invio goal solo la prima volta
+            if (!goal_sent_)
             {
-                this->nav2_done_ = true;
-                this->nav2_success_ = (result.code == rclcpp_action::ResultCode::SUCCEEDED);
-
-                std::string reason;
-                switch (result.code)
-                {
-                case rclcpp_action::ResultCode::SUCCEEDED:
-                    reason = "SUCCEEDED";
-                    break;
-                case rclcpp_action::ResultCode::ABORTED:
-                    reason = "ABORTED";
-                    break;
-                case rclcpp_action::ResultCode::CANCELED:
-                    reason = "CANCELED";
-                    break;
-                default:
-                    reason = "UNKNOWN";
-                    break;
-                }
-
-                if (!nav2_success_)
-                {
-                    RCLCPP_ERROR(get_logger(), "Navigation to %s failed: %s",
-                                 marker_to.c_str(), reason.c_str());
-                    finish(false, 1.0, "Navigation failed: " + reason);
-                }
-                else
+                if (!nav2_client_->wait_for_action_server(1s))
+                    return;
+                nav2_msgs::action::NavigateToPose::Goal goal_msg;
+                goal_msg.pose.header.frame_id = "map";
+                goal_msg.pose.header.stamp = now();
+                goal_msg.pose.pose.position.x = gx;
+                goal_msg.pose.pose.position.y = gy;
+                goal_msg.pose.pose.orientation.w = 1.0;
+                rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions options;
+                options.result_callback = [this, marker_to](auto result)
                 {
                     this->nav2_done_ = true;
-                    this->nav2_success_ = true;
-                    RCLCPP_INFO(get_logger(), "Navigation to %s succeeded", marker_to.c_str());
-                }
-            };
-
-            nav2_client_->async_send_goal(goal_msg, options);
-            goal_sent_ = true;
-
-            this->start_x_ = this->current_x_;
-            this->start_y_ = this->current_y_;
+                    this->nav2_success_ = (result.code == rclcpp_action::ResultCode::SUCCEEDED);
+                    std::string reason;
+                    switch (result.code)
+                    {
+                    case rclcpp_action::ResultCode::SUCCEEDED:
+                        reason = "SUCCEEDED";
+                        break;
+                    case rclcpp_action::ResultCode::ABORTED:
+                        reason = "ABORTED";
+                        break;
+                    case rclcpp_action::ResultCode::CANCELED:
+                        reason = "CANCELED";
+                        break;
+                    default:
+                        reason = "UNKNOWN";
+                        break;
+                    }
+                    if (!nav2_success_)
+                    {
+                        RCLCPP_ERROR(get_logger(), "Navigation to %s failed: %s", marker_to.c_str(), reason.c_str());
+                        finish(false, 1.0, "Navigation failed: " + reason);
+                    }
+                    else
+                    {
+                        this->nav2_done_ = true;
+                        this->nav2_success_ = true;
+                        this->state_ = AlignState::ALIGN;
+                        RCLCPP_INFO(get_logger(), "Navigation to %s succeeded going for align", marker_to.c_str());
+                    }
+                };
+                nav2_client_->async_send_goal(goal_msg, options);
+                goal_sent_ = true;
+                this->start_x_ = this->current_x_;
+                this->start_y_ = this->current_y_;
+            } // Calcolo distanza e progresso
+            double total_dist = std::hypot(gx - this->start_x_, gy - this->start_y_);
+            double rem_dist = std::hypot(gx - current_x_, gy - current_y_);
+            progress_ = total_dist > 0.0 ? 1.0 - std::min(rem_dist / total_dist, 1.0) : 1.0;
+            send_feedback(progress_, "Moving to " + marker_to);
         }
 
-        // Calcolo distanza e progresso
-        double total_dist = std::hypot(gx - this->start_x_, gy - this->start_y_);
-        double rem_dist = std::hypot(gx - current_x_, gy - current_y_);
-        progress_ = total_dist > 0.0 ? 1.0 - std::min(rem_dist / total_dist, 1.0) : 1.0;
-
-        send_feedback(progress_, "Moving to " + marker_to);
-
         // Threshold per completamento automatico
-        const double distance_threshold = 0.1; // metri
-        if (nav2_done_)
+        else if (this->state_ == AlignState::ALIGN)
         {
-            RCLCPP_INFO(get_logger(), "Goal raggiunto per distanza, completo l'azione");
-            nav2_done_ = true;
-            nav2_success_ = true;
-            remove_first_marker_from_yaml();
-            save_img();
-            finish(true, 1.0, "Completed");
+            RCLCPP_INFO(get_logger(), "align state , roating for the alignement");
+            if (!marker_visible_)
+            {
+                send_feedback(progress_, "Waiting for marker...");
+            }
+            else
+            {
+               
+                double dx = live_marker_x_;
+                double dy = live_marker_y_;
+
+                double dist_error = std::hypot(dx, dy);
+                double angle_error = std::atan2(dy, dx);
+
+                // const double dist_th = 0.05;
+                const double angle_th = 0.02;
+
+                geometry_msgs::msg::Twist cmd;
+                // cmd.linear.x = std::clamp(0.4 * dist_error, 0.0, 0.2);
+                cmd.angular.z = 0.6 * angle_error;
+
+                cmd_vel_pub_->publish(cmd);
+                RCLCPP_INFO(get_logger(), "Navigation photo taken %d", angle_error);
+
+                if (std::abs(angle_error) < angle_th)
+                {
+                    RCLCPP_INFO(get_logger(), "align state , dopo if");
+                    stop_robot();
+                    save_img();
+                    progress_ = 1.0;
+                    send_feedback(progress_, "Aligned to " + marker_to);
+                    this->state_ = AlignState::NAVIGATE;
+                    remove_first_marker_from_yaml();
+                    RCLCPP_INFO(get_logger(), "Navigation photo taken");
+                    marker_visible_ = false;
+                    finish(true, 1.0, "Completed");
+                    return;
+                }
+            }
         }
     }
 
@@ -341,8 +410,11 @@ private:
             // std::ifstream infile(file_path);
 
             // rcpputils::fs::create_directories(dir_path);
-            file_path = file_path + "/marker_" + std::to_string(marker_target.id) + ".png";
+            file_path = file_path + "/" + marker_target.name +"_" + std::to_string(marker_target.id) + ".png";
             cv::imwrite(file_path, cv_ptr->image);
+            sensor_msgs::msg::Image::SharedPtr img_msg = cv_ptr->toImageMsg();
+            img_pub_->publish(*img_msg);
+
             RCLCPP_INFO(get_logger(), "Saved %s", file_path.c_str());
         }
         catch (...)
@@ -360,20 +432,37 @@ private:
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
     on_activate(const rclcpp_lifecycle::State &previous_state) override
     {
+        this->state_ = AlignState::NAVIGATE;
         goal_sent_ = false;
         nav2_done_ = false;
         marker_target.name = "";
         return plansys2::ActionExecutorClient::on_activate(previous_state);
     }
+
+    void stop_robot()
+    {
+        geometry_msgs::msg::Twist cmd;
+        cmd_vel_pub_->publish(cmd); // tutto a zero
+    }
+
     float progress_;
     bool goal_sent_, nav2_done_, nav2_success_;
     double current_x_, current_y_;
-    double start_x_ = 0.0,start_y_ = 0.0;
+    double start_x_ = 0.0, start_y_ = 0.0;
     MarkerData marker_target;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
     rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr nav2_client_;
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr img_pub_;
     sensor_msgs::msg::Image::SharedPtr last_img_;
+    AlignState state_ = AlignState::NAVIGATE;
+    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+    rclcpp::Subscription<aruco_opencv_msgs::msg::ArucoDetection>::SharedPtr aruco_sub_;
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+    double live_marker_x_ = 0.0;
+    double live_marker_y_ = 0.0;
+    bool marker_visible_ = false;
 };
 
 int main(int argc, char **argv)
