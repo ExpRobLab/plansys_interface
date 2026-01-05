@@ -5,7 +5,6 @@
 #include <vector>
 #include <set>
 #include <algorithm>
-#include <filesystem> // Per gestione path standard
 
 #include "plansys2_executor/ActionExecutorClient.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -13,15 +12,15 @@
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "lifecycle_msgs/msg/transition.hpp"
-#include <ament_index_cpp/get_package_share_directory.hpp> // Per path relativo
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include "bme_gazebo_basics/action/scan.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "aruco_opencv_msgs/msg/aruco_detection.hpp"
+#include <rcpputils/filesystem_helper.hpp>
 
 using namespace std::chrono_literals;
-namespace fs = std::filesystem;
 
 const size_t TARGET_MARKERS_COUNT = 2; 
 
@@ -61,20 +60,6 @@ public:
     nav2_done_ = false;
     nav2_success_ = false;
     current_wp_idx_ = 0;
-  }
-
-private:
-  // Funzione helper per risalire alla radice della workspace
-  std::string get_ws_path() {
-    try {
-        std::string pkg_path = ament_index_cpp::get_package_share_directory("bme_gazebo_basics");
-        fs::path p(pkg_path);
-        // Risale: share/bme_gazebo_basics -> share -> install -> workspace
-        return p.parent_path().parent_path().parent_path().parent_path().string();
-    } catch (...) {
-        RCLCPP_ERROR(this->get_logger(), "Errore nel trovare il path del pacchetto!");
-        return ".";
-    }
   }
 
   void detection_callback(const aruco_opencv_msgs::msg::ArucoDetection::SharedPtr msg)
@@ -119,6 +104,7 @@ private:
     }
   }
 
+private:
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
   on_activate(const rclcpp_lifecycle::State &previous_state) override
   {
@@ -142,10 +128,10 @@ private:
     this->marker_to = args[1];
     double gx, gy;
 
-    if (this->marker_to == "marker1") { gx = -6.0; gy = -6.0; }
-    else if (this->marker_to == "marker2") { gx = -6.0; gy = 6.0; }
-    else if (this->marker_to == "marker3") { gx = 6.0; gy = -6.0; }
-    else if (this->marker_to == "marker4") { gx = 6.0; gy = 6.0; }
+    if (this->marker_to == "marker1") { gx = -6; gy = -6; }
+    else if (this->marker_to == "marker2") { gx = -6; gy = 6; }
+    else if (this->marker_to == "marker3") { gx = 6; gy = -6; }
+    else if (this->marker_to == "marker4") { gx = 6; gy = 6; }
     else { finish(false, 0.0, "Marker ignoto"); return; }
 
     this->goal_x_ = gx;
@@ -162,7 +148,7 @@ private:
       goal_msg.pose.pose.position.y = gy;
       goal_msg.pose.pose.orientation.w = 1.0;
 
-      auto options = rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions();
+      rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions options;
       options.result_callback = [this](auto result) {
         nav2_done_ = true;
         nav2_success_ = (result.code == rclcpp_action::ResultCode::SUCCEEDED);
@@ -188,29 +174,29 @@ private:
     current_x_ = msg->pose.pose.position.x;
     current_y_ = msg->pose.pose.position.y;
   }
-
   void save_in_yaml()
-  {
-    std::string ws_path = get_ws_path();
-    std::string file_path = ws_path + "/points_detected/detected_markers.yaml";
+{
+    const char *home_ptr = std::getenv("HOME");
+    if (!home_ptr) return;
 
-    // Assicuriamoci che la cartella esista
-    fs::path dir_path = fs::path(file_path).parent_path();
-    if (!fs::exists(dir_path)) {
-        fs::create_directories(dir_path);
-    }
+    std::string file_path = std::string(home_ptr) + "/Desktop/Experimental/assignment2_ws/points_detected/detected_markers.yaml";
 
-    bool file_exists = fs::exists(file_path);
+    // Verifichiamo se il file esiste già per capire se dobbiamo scrivere l'intestazione
+    std::ifstream check_file(file_path);
+    bool file_exists = check_file.good();
+    check_file.close();
 
-    // Apertura in modalità APPEND
+    // Apriamo in modalità APPEND (std::ios::app)
     std::ofstream outfile(file_path, std::ios::app);
     
     if (outfile.is_open())
     {
-        if (!file_exists || fs::file_size(file_path) == 0) {
+        // Se il file è nuovo, scriviamo l'intestazione iniziale
+        if (!file_exists) {
             outfile << "markers:\n";
         }
 
+        // markers_detected_this_run_ contiene i marker trovati in questa azione
         for (const auto &m : markers_detected_this_run_)
         {
             outfile << "  - id: " << m.id << "\n";
@@ -223,11 +209,9 @@ private:
         }
         
         outfile.close();
-        RCLCPP_INFO(get_logger(), "Marker salvati con successo in: %s", file_path.c_str());
-    } else {
-        RCLCPP_ERROR(get_logger(), "Errore nell'apertura del file YAML per il salvataggio!");
+        RCLCPP_INFO(get_logger(), "Marker aggiunti in append al file.");
     }
-  }
+}
 
   bool goal_sent_ = false;
   bool nav2_done_ = false;

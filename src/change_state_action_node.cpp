@@ -10,29 +10,27 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include <rcpputils/filesystem_helper.hpp>
 #include "lifecycle_msgs/msg/transition.hpp"
-#include <filesystem> // Fondamentale per fs::path
-#include <ament_index_cpp/get_package_share_directory.hpp>
+
 using namespace std::chrono_literals;
-namespace fs = std::filesystem;
-
-
 class ChangeState : public plansys2::ActionExecutorClient
 {
 public:
   ChangeState()
       : plansys2::ActionExecutorClient("change_state", 500ms)
   {
+    // Subscription odometry
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "/odom", 10,
         std::bind(&ChangeState::odom_callback, this, std::placeholders::_1));
 
+    // Client Nav2
     nav2_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(
         this, "navigate_to_pose");
 
+    // inizializza i flag
     nav2_done_ = false;
     nav2_success_ = false;
   }
-
   struct MarkerData
   {
     long id;
@@ -45,20 +43,7 @@ public:
   };
 
 private:
-  // Funzione helper per risalire alla radice della workspace
-  std::string get_ws_path() {
-    try {
-        // Ottiene: .../assignment2_ws/install/bme_gazebo_basics/share/bme_gazebo_basics
-        std::string pkg_path = ament_index_cpp::get_package_share_directory("bme_gazebo_basics");
-        fs::path p(pkg_path);
-        // Risale 4 livelli: share -> bme_gazebo_basics -> install -> workspace
-        return p.parent_path().parent_path().parent_path().parent_path().string();
-    } catch (...) {
-        RCLCPP_ERROR(this->get_logger(), "Impossibile trovare il percorso del pacchetto bme_gazebo_basics!");
-        return "."; 
-    }
-  }
-
+  // Resetta stato ogni volta che l’azione viene attivata
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
   on_activate(const rclcpp_lifecycle::State &previous_state) override
   {
@@ -71,7 +56,6 @@ private:
 
   void do_work() override
   {
-     RCLCPP_INFO(get_logger(), "[changestte] ahahahhhhahahhhahahh");
     auto args = get_arguments();
     if (args.size() < 7)
     {
@@ -106,10 +90,11 @@ private:
       goal_sent_ = true;
     }
 
+    // finish SOLO qui
     if (nav2_done_)
     {
-      // cleanup_and_save_yaml();
-      finish(true, 1.0, "Completed");
+      cleanup_and_save_yaml();
+      finish(nav2_success_, 1.0, "Completed");
       return;
     }
 
@@ -123,103 +108,105 @@ private:
     current_x_ = msg->pose.pose.position.x;
     current_y_ = msg->pose.pose.position.y;
   }
+void cleanup_and_save_yaml()
+{
+  const char *home_ptr = std::getenv("HOME");
+  if (!home_ptr) return;
 
-  void cleanup_and_save_yaml()
+  std::string file_path = std::string(home_ptr) + "/Desktop/Experimental/assignment2_ws/points_detected/detected_markers.yaml";
+  rcpputils::fs::create_directories(rcpputils::fs::path(file_path).parent_path().string());
+
+  // Mappa per tenere solo il marker con ID minore per ogni NOME (marker1, marker2...)
+  std::map<std::string, MarkerData> best_markers_by_name;
+
+  // --- STEP 1: Lettura e Filtraggio per Nome ---
+  std::ifstream infile(file_path);
+  if (infile.is_open())
   {
-    // Generazione percorso relativo alla workspace
-    std::string file_path = get_ws_path() + "/points_detected/detected_markers.yaml";
-    
-    // Assicura che la directory esista
-    fs::path dir_path = fs::path(file_path).parent_path();
-    if (!fs::exists(dir_path)) {
-        fs::create_directories(dir_path);
-    }
+    std::string line;
+    MarkerData m;
+    int fields_found = 0;
 
-    std::map<std::string, std::vector<MarkerData>> markers_by_name;
-
-    std::ifstream infile(file_path);
-    if (infile.is_open())
+    while (std::getline(infile, line))
     {
-      std::string line;
-      MarkerData m;
-      int fields_found = 0;
+      size_t first = line.find_first_not_of(" \t-");
+      if (first == std::string::npos) continue;
+      std::string clean_line = line.substr(first);
 
-      while (std::getline(infile, line))
+      if (clean_line.find("id:") == 0) { m.id = std::stol(clean_line.substr(3)); fields_found++; }
+      else if (clean_line.find("name:") == 0) {
+        m.name = clean_line.substr(5);
+        m.name.erase(0, m.name.find_first_not_of(" "));
+        fields_found++;
+      }
+      else if (clean_line.find("frame:") == 0) {
+        m.frame = clean_line.substr(6);
+        m.frame.erase(0, m.frame.find_first_not_of(" "));
+        fields_found++;
+      }
+      else if (clean_line.find("goal_x:") == 0) { m.goal_x = std::stod(clean_line.substr(7)); fields_found++; }
+      else if (clean_line.find("goal_y:") == 0) { m.goal_y = std::stod(clean_line.substr(7)); fields_found++; }
+      else if (clean_line.find("x:") == 0) { m.x = std::stod(clean_line.substr(2)); fields_found++; }
+      else if (clean_line.find("y:") == 0) { m.y = std::stod(clean_line.substr(2)); fields_found++; }
+
+      if (fields_found == 7)
       {
-        size_t first = line.find_first_not_of(" \t-");
-        if (first == std::string::npos)
-          continue;
-        std::string clean_line = line.substr(first);
-
-        if (clean_line.find("id:") == 0) { m.id = std::stol(clean_line.substr(3)); fields_found++; }
-        else if (clean_line.find("name:") == 0) {
-          m.name = clean_line.substr(5);
-          m.name.erase(0, m.name.find_first_not_of(" "));
-          fields_found++;
-        }
-        else if (clean_line.find("frame:") == 0) {
-          m.frame = clean_line.substr(6);
-          m.frame.erase(0, m.frame.find_first_not_of(" "));
-          fields_found++;
-        }
-        else if (clean_line.find("goal_x:") == 0) { m.goal_x = std::stod(clean_line.substr(7)); fields_found++; }
-        else if (clean_line.find("goal_y:") == 0) { m.goal_y = std::stod(clean_line.substr(7)); fields_found++; }
-        else if (clean_line.find("x:") == 0) { m.x = std::stod(clean_line.substr(2)); fields_found++; }
-        else if (clean_line.find("y:") == 0) { m.y = std::stod(clean_line.substr(2)); fields_found++; }
-
-        if (fields_found == 7)
+        // Se è la prima volta che vediamo questo nome O se questo ID è più piccolo del precedente
+        if (best_markers_by_name.find(m.name) == best_markers_by_name.end() || m.id < best_markers_by_name[m.name].id)
         {
-          markers_by_name[m.name].push_back(m);
-          fields_found = 0;
+          best_markers_by_name[m.name] = m;
         }
-      }
-      infile.close();
-    }
-
-    if (markers_by_name.empty())
-      return;
-
-    std::set<long> used_ids;
-    std::vector<MarkerData> final_list;
-
-    for (auto &[name, candidates] : markers_by_name)
-    {
-      std::sort(candidates.begin(), candidates.end(),
-                [](const MarkerData &a, const MarkerData &b) { return a.id < b.id; });
-
-      for (const auto &m : candidates)
-      {
-        if (!used_ids.count(m.id))
-        {
-          final_list.push_back(m);
-          used_ids.insert(m.id);
-          break;
-        }
+        fields_found = 0;
       }
     }
+    infile.close();
+  }
 
-    std::ofstream outfile(file_path, std::ios::trunc);
-    if (outfile.is_open())
-    {
-      outfile << "markers:\n";
-      for (const auto &m : final_list)
-      {
-        outfile << "  - id: " << m.id << "\n";
-        outfile << "    name: " << m.name << "\n";
-        outfile << "    frame: " << m.frame << "\n";
-        outfile << "    x: " << m.x << "\n";
-        outfile << "    y: " << m.y << "\n";
-        outfile << "    goal_x: " << m.goal_x << "\n";
-        outfile << "    goal_y: " << m.goal_y << "\n";
-      }
-      outfile.close();
-      RCLCPP_INFO(get_logger(), "Cleanup completato in: %s", file_path.c_str());
+  if (best_markers_by_name.empty()) return;
+
+  // --- STEP 2: Trasferimento in vettore e risoluzione conflitti ID ---
+  std::vector<MarkerData> final_list;
+  for (auto const& [name, data] : best_markers_by_name) {
+    final_list.push_back(data);
+  }
+
+  // Ordiniamo per ID attuale
+  std::sort(final_list.begin(), final_list.end(), [](const MarkerData &a, const MarkerData &b) {
+    return a.id < b.id;
+  });
+
+  // Risoluzione ID duplicati tra nomi diversi
+  for (size_t i = 1; i < final_list.size(); ++i) {
+    if (final_list[i].id <= final_list[i-1].id) {
+      final_list[i].id = final_list[i-1].id + 1;
     }
   }
 
+  // --- STEP 3: Scrittura finale ---
+  std::ofstream outfile(file_path, std::ios::trunc);
+  if (outfile.is_open())
+  {
+    outfile << "markers:\n";
+    for (const auto &m : final_list)
+    {
+      outfile << "  - id: " << m.id << "\n";
+      outfile << "    name: " << m.name << "\n";
+      outfile << "    frame: " << m.frame << "\n";
+      outfile << "    x: " << m.x << "\n";
+      outfile << "    y: " << m.y << "\n";
+      outfile << "    goal_x: " << m.goal_x << "\n";
+      outfile << "    goal_y: " << m.goal_y << "\n";
+    }
+    outfile.close();
+    RCLCPP_INFO(get_logger(), "Cleanup completato: mantenuti %zu marker univoci.", final_list.size());
+  }
+}
+  // Stato interno
   bool goal_sent_ = false;
   bool nav2_done_ = false;
   bool nav2_success_ = false;
+
+  double goal_x_ = 0.0, goal_y_ = 0.0;
   double current_x_ = 0.0, current_y_ = 0.0;
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
