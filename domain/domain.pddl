@@ -106,7 +106,7 @@
             (at end (free ?r))        )
     )
 
-    (:durative-action move_to_photograph
+    (:durative-action move_to_photograph_mode
      :parameters (?r - robot ?m - marker)
         :duration ( = ?duration 5)
         :condition (and
