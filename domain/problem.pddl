@@ -42,7 +42,7 @@
 )
 (:goal
     (and
-
+; (photo_mode)
     (photographed marker1)
     (photographed marker2)
     (photographed marker3)

@@ -5,7 +5,7 @@
 #include <vector>
 #include <set>
 #include <algorithm>
-
+#include <filesystem>
 #include "plansys2_executor/ActionExecutorClient.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -21,7 +21,7 @@
 #include <rcpputils/filesystem_helper.hpp>
 
 using namespace std::chrono_literals;
-
+namespace fs = std::filesystem;
 const size_t TARGET_MARKERS_COUNT = 2; 
 
 class MoveToDetect : public plansys2::ActionExecutorClient
@@ -105,6 +105,18 @@ public:
   }
 
 private:
+ std::string get_ws_path() {
+    try {
+        std::string pkg_path = ament_index_cpp::get_package_share_directory("bme_gazebo_basics");
+        fs::path p(pkg_path);
+        // Risale: share/bme_gazebo_basics -> share -> install -> workspace
+        return p.parent_path().parent_path().parent_path().parent_path().string();
+    } catch (...) {
+        RCLCPP_ERROR(this->get_logger(), "Errore nel trovare il path del pacchetto!");
+        return ".";
+    }
+  }
+
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
   on_activate(const rclcpp_lifecycle::State &previous_state) override
   {
@@ -176,11 +188,12 @@ private:
   }
   void save_in_yaml()
 {
-    const char *home_ptr = std::getenv("HOME");
-    if (!home_ptr) return;
-
-    std::string file_path = std::string(home_ptr) + "/Desktop/Experimental/assignment2_ws/points_detected/detected_markers.yaml";
-
+    std::string ws_path = get_ws_path();
+    std::string file_path = ws_path + "/points_detected/detected_markers.yaml";
+    fs::path dir_path = fs::path(file_path).parent_path();
+    if (!fs::exists(dir_path)) {
+        fs::create_directories(dir_path);
+    }
     // Verifichiamo se il file esiste già per capire se dobbiamo scrivere l'intestazione
     std::ifstream check_file(file_path);
     bool file_exists = check_file.good();

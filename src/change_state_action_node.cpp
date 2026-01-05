@@ -10,8 +10,11 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include <rcpputils/filesystem_helper.hpp>
 #include "lifecycle_msgs/msg/transition.hpp"
-
+#include <filesystem> // Fondamentale per fs::path
+#include <ament_index_cpp/get_package_share_directory.hpp>
 using namespace std::chrono_literals;
+namespace fs = std::filesystem;
+
 class ChangeState : public plansys2::ActionExecutorClient
 {
 public:
@@ -43,6 +46,18 @@ public:
   };
 
 private:
+  std::string get_ws_path() {
+    try {
+        // Ottiene: .../assignment2_ws/install/bme_gazebo_basics/share/bme_gazebo_basics
+        std::string pkg_path = ament_index_cpp::get_package_share_directory("bme_gazebo_basics");
+        fs::path p(pkg_path);
+        // Risale 4 livelli: share -> bme_gazebo_basics -> install -> workspace
+        return p.parent_path().parent_path().parent_path().parent_path().string();
+    } catch (...) {
+        RCLCPP_ERROR(this->get_logger(), "Impossibile trovare il percorso del pacchetto bme_gazebo_basics!");
+        return "."; 
+    }
+  }
   // Resetta stato ogni volta che l’azione viene attivata
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
   on_activate(const rclcpp_lifecycle::State &previous_state) override
@@ -64,7 +79,7 @@ private:
     }
 
     std::string marker_to = "home_point";
-    double gx = 0;
+    double gx = 3;
     double gy = 1;
 
     if (!goal_sent_)
@@ -88,19 +103,25 @@ private:
 
       nav2_client_->async_send_goal(goal_msg, options);
       goal_sent_ = true;
-    }
 
+      this->start_x_ = this->current_x_;
+      this->start_y_ = this->current_y_;
+    }
+    double total_dist = std::hypot(gx - this->start_x_, gy - this->start_y_);
+    double rem_dist   = std::hypot(gx - current_x_, gy - current_y_);
+    progress_ = total_dist > 0.0 ? 1.0 - std::min(rem_dist / total_dist, 1.0) : 1.0;
+
+    send_feedback(progress_, "Moving to " + marker_to);
     // finish SOLO qui
     if (nav2_done_)
     {
+      progress_ = 1.0;
       cleanup_and_save_yaml();
+       send_feedback(progress_, "Moving to " + marker_to);
       finish(nav2_success_, 1.0, "Completed");
       return;
     }
 
-    double dist = std::hypot(gx - current_x_, gy - current_y_);
-    send_feedback(std::max(0.0, 1.0 - dist / 10.0),
-                  "In movimento verso " + marker_to);
   }
 
   void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
@@ -110,12 +131,13 @@ private:
   }
 void cleanup_and_save_yaml()
 {
-  const char *home_ptr = std::getenv("HOME");
-  if (!home_ptr) return;
-
-  std::string file_path = std::string(home_ptr) + "/Desktop/Experimental/assignment2_ws/points_detected/detected_markers.yaml";
-  rcpputils::fs::create_directories(rcpputils::fs::path(file_path).parent_path().string());
-
+    std::string file_path = get_ws_path() + "/points_detected/detected_markers.yaml";
+    
+    // Assicura che la directory esista
+    fs::path dir_path = fs::path(file_path).parent_path();
+    if (!fs::exists(dir_path)) {
+        fs::create_directories(dir_path);
+    }
   // Mappa per tenere solo il marker con ID minore per ogni NOME (marker1, marker2...)
   std::map<std::string, MarkerData> best_markers_by_name;
 
@@ -202,10 +224,12 @@ void cleanup_and_save_yaml()
   }
 }
   // Stato interno
+   float progress_;
+
   bool goal_sent_ = false;
   bool nav2_done_ = false;
   bool nav2_success_ = false;
-
+  double start_x_ = 0.0, start_y_ = 0.0;
   double goal_x_ = 0.0, goal_y_ = 0.0;
   double current_x_ = 0.0, current_y_ = 0.0;
 

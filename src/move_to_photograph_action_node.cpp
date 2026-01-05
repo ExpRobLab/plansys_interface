@@ -3,6 +3,8 @@
 #include <cmath>
 #include <fstream>
 #include <vector>
+#include <filesystem>
+
 #include "plansys2_executor/ActionExecutorClient.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -18,6 +20,8 @@
 #include <opencv2/opencv.hpp>
 
 using namespace std::chrono_literals;
+namespace fs = std::filesystem;
+
 
 class MoveToPhotograph : public plansys2::ActionExecutorClient
 {
@@ -54,12 +58,21 @@ public:
     }
 
 private:
+
+std::string get_ws_path() {
+        try {
+            std::string pkg_path = ament_index_cpp::get_package_share_directory("bme_gazebo_basics");
+            fs::path p(pkg_path);
+            return p.parent_path().parent_path().parent_path().parent_path().string();
+        } catch (...) {
+            RCLCPP_ERROR(this->get_logger(), "Impossibile trovare il percorso del pacchetto!");
+            return "."; 
+        }
+    }
     void load_detected_markers()
     {
-        const char *home_ptr = std::getenv("HOME");
-        if (!home_ptr) return;
-
-        std::string file_path = std::string(home_ptr) + "/Desktop/Experimental/assignment2_ws/points_detected/detected_markers.yaml";
+        std::string ws_path = get_ws_path();
+        std::string file_path = ws_path + "/points_detected/detected_markers.yaml";
         std::ifstream infile(file_path);
         
         if (!infile.is_open()) {
@@ -95,10 +108,8 @@ private:
 
     void remove_first_marker_from_yaml()
     {
-        const char *home_ptr = std::getenv("HOME");
-        if (!home_ptr) return;
-
-        std::string file_path = std::string(home_ptr) + "/Desktop/Experimental/assignment2_ws/points_detected/detected_markers.yaml";
+           std::string ws_path = get_ws_path();
+        std::string file_path = ws_path + "/points_detected/detected_markers.yaml";
         std::vector<MarkerData> remaining;
         
         std::ifstream infile(file_path);
@@ -189,9 +200,18 @@ private:
         try {
             cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(last_img_, sensor_msgs::image_encodings::BGR8);
             cv::circle(cv_ptr->image, cv::Point(cv_ptr->image.cols / 2, cv_ptr->image.rows / 2), 50, CV_RGB(0, 255, 0), 3);
-            std::string dir_path = std::string(std::getenv("HOME")) + "/Desktop/Experimental/assignment2_ws/images";
-            rcpputils::fs::create_directories(dir_path);
-            std::string file_path = dir_path + "/marker_" + std::to_string(marker_target.id) + ".png";
+            // std::string dir_path = std::string(std::getenv("HOME")) + "/Desktop/Experimental/assignment2_ws/images";
+            std::string ws_path = get_ws_path();
+            std::string file_path = ws_path + "/images";
+            if (!fs::exists(file_path)) {
+                fs::create_directories(file_path);
+            }
+
+            // std::ifstream infile(file_path);
+            
+            
+            // rcpputils::fs::create_directories(dir_path);
+            file_path = file_path + "/marker_" + std::to_string(marker_target.id) + ".png";
             cv::imwrite(file_path, cv_ptr->image);
             RCLCPP_INFO(get_logger(), "Saved %s", file_path.c_str());
         } catch (...) { RCLCPP_ERROR(get_logger(), "Save image error"); }
