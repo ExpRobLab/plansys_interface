@@ -140,29 +140,25 @@ This project implements two PDDL actions, each backed by a ROS 2 performer node:
 
 ---
 
-## 6) Topics, TF, and outputs
-
+## 6) Topics, TF, and outputs (update needed)
 ### 6.1 Subscribed topics
 - `/camera/image/compressed`
 - `/aruco_detections`
 - `/tf`
-
 ### 6.2 Published topics
 - `/Nav2`
 - `/final_marker_image`
-
 ### 6.3 Frames
 - `odom`
 - `base_footprint`
 - `camera_link`
 - `marker_<id>`
-
 ### 6.4 Saved artifacts
 - `output/marker_<id>.png`
 
 ---
 
-## 7) Prerequisites
+## 7) Prerequisites (update needed)
 
 - OS: Ubuntu (tested on Ubuntu 22 for ROS 2 Humble and Ubuntu 24 for ROS 2 Jazzy).
 - ROS 2: Humble (works) and Jazzy (works)
@@ -175,7 +171,7 @@ This project implements two PDDL actions, each backed by a ROS 2 performer node:
 
 ---
 
-## 8) Build & run
+## 8) Build & run (update needed)
 
 ### 8.1 Build workspace
 ```bash
@@ -205,7 +201,7 @@ ros2 run plansys2_terminal plansys2_terminal
 ```
 In the second terminal, run `get plan` in order to generate a plan and then run `run` for robot to start.
 
-## 9) Results
+## 9) Results (update needed)
 ### 9.1 Output images
 
 ### 9.2 RQT graph / node graph
