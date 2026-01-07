@@ -23,7 +23,7 @@
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
 // number of markers to detect per plack
-const size_t TARGET_MARKERS_COUNT = 2;
+const size_t TARGET_MARKERS_COUNT = 5;
 
 class MoveToDetect : public plansys2::ActionExecutorClient
 {

@@ -233,10 +233,21 @@ private:
     if (markers.empty())
       return;
 
-    // sorting markers
-    std::sort(markers.begin(), markers.end(), [](const MarkerData &a, const MarkerData &b)
-              { return a.id < b.id; });
+    if (markers.empty())
+      return;
 
+    // ordering markers
+    std::sort(markers.begin(), markers.end(), [](const MarkerData &a, const MarkerData &b)
+              {
+      if (a.id != b.id) {
+          return a.id < b.id;
+      }
+      return a.name < b.name; });
+
+    // removing duplicates
+    auto last = std::unique(markers.begin(), markers.end(), [](const MarkerData &a, const MarkerData &b)
+                            { return a.id == b.id && a.name == b.name; });
+    markers.erase(last, markers.end());
     // saving ordered markers in yaml
     std::ofstream outfile(file_path, std::ios::trunc);
     if (outfile.is_open())

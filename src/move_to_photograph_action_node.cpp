@@ -417,7 +417,6 @@ private:
                     progress_ = 1.0;
 
                     send_feedback(progress_, "Aligned to " + marker_to);
-                    this->state_ = AlignState::NAVIGATE;
                     remove_from_yaml();
                     this->marker_visible_ = false;
                     finish(true, 1.0, "Completed");
