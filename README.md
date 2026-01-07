@@ -6,17 +6,6 @@ Authors: Gian Marco Balia, Christian Negri Ravera, Francesca Amato, Filippo Salt
 **Short description:**  
 We control a mobile robot in Gazebo to search an environment until all ArUco markers are found and then visit and “capture” each marker in ascending ID order. The behavior is modeled in PDDL and executed using PlanSys2: a planner generates a valid sequence of actions (e.g., explore → change state → capture), and an executor runs it by activating our ROS 2 action nodes. Captures are produced by annotating the camera image and saving the final frames to disk, while also publishing the annotated image on a topic.
 
-<table>
-  <tr>
-    <td><b>Gazebo </b></td>
-    <td><b>PlanSys2 </b></td>
-  </tr>
-  <tr>
-    <td><img src="docs/gazebo.png" width="533" height="300"></td>
-    <td><img src="docs/plan.png" width="533" height="300"></td>
-  </tr>
-</table>
-
 ---
 
 ## 1) Main idea
